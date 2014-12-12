@@ -40,22 +40,17 @@ public class SentCount extends Configured implements Tool {
 //	      job.setNumReduceTasks(2);
 	      job.setMapOutputKeyClass(Text.class);
 	      job.setMapOutputValueClass(Sentence.class);
-	      
 	      job.setOutputKeyClass(Text.class);
 	      job.setOutputValueClass(IntWritable.class);
-	      
 	      job.setMapperClass(Map.class);
 	      job.setReducerClass(Reduce.class);
-
 	      job.setInputFormatClass(TextInputFormat.class);
 	      job.setOutputFormatClass(TextOutputFormat.class);
 
 	      FileInputFormat.addInputPath(job, new Path(args[0]));
 	      FileOutputFormat.setOutputPath(job, new Path(args[1]));
-
 	      job.waitForCompletion(true);
-	      
-		return 0;
+        return 0;
 	}
 
 	/**
@@ -64,7 +59,6 @@ public class SentCount extends Configured implements Tool {
 	public static void main(String[] args) throws Exception {
 	      System.out.println(Arrays.toString(args));
 	      int res = ToolRunner.run(new Configuration(), new SentCount(), args);
-	      
 	      System.exit(res);
 	}
 	
@@ -73,32 +67,57 @@ public class SentCount extends Configured implements Tool {
 	// && ID is different && firstFiveWords? == their firstFiveWords
 	public static class Sentence implements Writable {
 		public String sentence;
-		//public String[] sentence;
+        //public String[] sentence;
 		public boolean firstFiveWords; //false = last 5 words
-		public int length;
+		public int length; //is length number of words?
 		public int ID;
-		
+
+        //usually you have one full constructor
+        public Sentence(String sentence, boolean firstFiveWords, int length, int ID){
+            this.sentence = sentence;
+            this.firstFiveWords = firstFiveWords;
+            this.length = length;
+            this.ID = ID;
+        }
+
 		public Sentence(){
-			this.sentence = null;
-			this.firstFiveWords = false;
-			this.length = 0;
-			this.ID = -1;
+            this(null, false, 0, -1);
 		}
-		
-		public Sentence(String sentence, boolean firstFiveWords, int length, int ID){
-			this.sentence = sentence;
-			this.firstFiveWords = firstFiveWords;
-			this.length = length;
-			this.ID = ID;
-		}
-		
-		public void set(String sentence, boolean firstFiveWords, int length, int ID){
-			this.sentence = sentence;
-			this.firstFiveWords = firstFiveWords;
-			this.length = length;
-			this.ID = ID;	
-		}
-		
+        //usually you have individual setters/getters for the fields
+        //if you need to reset them all again, consider just making new object
+        public String getSentence() {
+            return sentence;
+        }
+
+        public void setSentence(String sentence) {
+            this.sentence = sentence;
+        }
+
+        public boolean isFirstFiveWords() {
+            return firstFiveWords;
+        }
+
+        public void setFirstFiveWords(boolean firstFiveWords) {
+            this.firstFiveWords = firstFiveWords;
+        }
+
+        public int getLength() {
+            return length;
+        }
+
+        public void setLength(int length) {
+            this.length = length;
+        }
+
+        public int getID() {
+            return ID;
+        }
+
+        public void setID(int ID) {
+            this.ID = ID;
+        }
+
+
 		public void write(DataOutput out) throws IOException {
 //			WritableUtils.writeCompressedStringArray(out, sentence);
 			out.writeUTF(sentence);
@@ -106,7 +125,8 @@ public class SentCount extends Configured implements Tool {
 			out.writeInt(length);
 			out.writeInt(ID);
 		}
-		
+
+        //consider naming this method "fromFile"
 		public void readFields(DataInput in) throws IOException {
 //			sentence = WritableUtils.readCompressedStringArray(in);
 			sentence = in.readUTF();
@@ -117,18 +137,29 @@ public class SentCount extends Configured implements Tool {
 	}
 	
 	public static class Map extends Mapper<LongWritable, Text, Text, Sentence> {
-		private static Text ffw = new Text();
-		private static Text lfw = new Text();
+		//better variable naming
+        //what is the reason that these are here and not inside the function?
+        private static Text ffw = new Text();
+        private static Text lfw = new Text();
 		private static Sentence snt = new Sentence();
 		private static Text sntt = new Text();
-		
+
 		@Override
 		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-			String[] IDsent = value.toString().split(" ",2);
-			String sentInString = IDsent[1];
+
+
+			//lower case variable names
+            String[] iDsent = value.toString().split(" ",2);
+			String sentInString = iDsent[1];
 			String[] sentence = sentInString.split(" ");
-			int l = sentence.length;
-			int num = Integer.parseInt(IDsent[0]);
+			//shouldn't need a variable for sentence.length
+            //sentence.length is also more informative than "l"
+            int l = sentence.length;
+			int num = Integer.parseInt(iDsent[0]);
+
+
+            //for all your string building, use StringBuilder
+            //https://docs.oracle.com/javase/tutorial/java/data/buffers.html
 			String firstFiveWords = "";
 			for (int i = 0; i < 5; i++){
 				firstFiveWords += sentence[i] + " ";
@@ -137,10 +168,14 @@ public class SentCount extends Configured implements Tool {
 			snt.set(sentInString,true,l,num);
 			ffw.set(firstFiveWords);
 			context.write(ffw, snt);
+
+
+            //same comment earlier
 			String lastFiveWords = "";
 			for (int i = l-5; i < l; i++){
 				lastFiveWords += " " + sentence[i];
 			}
+
 			snt.set(sentInString,false,l,num);
 			lfw.set(lastFiveWords);
 			context.write(lfw, snt);
@@ -162,6 +197,9 @@ public class SentCount extends Configured implements Tool {
 	        same.put(true,0);
 	        same.put(false,0);
 		}
+
+
+        //shouldn't these two objects be created inside reduce?
 		private static Text txt = new Text("jizz");
 		private static IntWritable cnt = new IntWritable(0);
 		private static int totalunique = 0;
@@ -172,7 +210,9 @@ public class SentCount extends Configured implements Tool {
 			throws IOException, InterruptedException {
 			ArrayList<Sentence> bucket = new ArrayList<Sentence>(50);
 			Sentence sentence1,sentence2;
-			int id1,id2;
+			//you dont need to declare these outside. just go ahead and use them within
+            //the function loop and it'll just be garbage collected pretty quickly
+            int id1,id2;
 			boolean first1,first2;
 			int l1,l2;
 			String s1,s2;
@@ -201,7 +241,10 @@ public class SentCount extends Configured implements Tool {
 				for (int j = i+1; j < bucketsize; j++) {
 					//init crap for the other sentence
 					sentence2 = bucket.get(j);
-					id2 = sentence2.ID;
+					//you should also jsut go ahead and use those, no need
+                    //to reassign them to other variables
+
+                    id2 = sentence2.ID;
 					first2 = sentence2.firstFiveWords;
 					l2 = sentence2.length;
 					s2 = sentence2.sentence;
@@ -251,6 +294,7 @@ public class SentCount extends Configured implements Tool {
 
 
 		//check if s1 and s2 differ by one word at most.
+        //this is gud
 		public static boolean checkEditDist(String sp1, String sp2, int l1, int l2){
 			String[] s1 = split(sp1,' ');
 			String[] s2 = split(sp2,' ');
@@ -286,7 +330,8 @@ public class SentCount extends Configured implements Tool {
 			if (diff>1) return false;
 			return true;
 		} //checkEditDist
-		
+
+        //for first 5 can you just check if the substrings are equal?
 		public static boolean checkFiveWords(String sp1, String sp2, boolean first1, boolean first2, int l1, int l2){
 			String[] s1 = split(sp1,' ');
 			String[] s2 = split(sp2,' ');
@@ -302,7 +347,9 @@ public class SentCount extends Configured implements Tool {
 			}
 			return (checkFirst & firstSame) | (checkLast & lastSame);
 		}
-		
+
+        //I think string already has a split function?
+        //http://docs.oracle.com/javase/6/docs/api/java/lang/String.html#split(java.lang.String)
 		public static String[] split(final String s, final char delimeter) {    
 	        int count = 1;    
 	        for (int i = 0; i < s.length(); i++)
